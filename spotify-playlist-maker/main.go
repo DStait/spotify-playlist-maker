@@ -161,16 +161,8 @@ func playlistMappingContains(s map[string]spotify.ID, str string) bool {
 	return false
 }
 
-func updatePlaylist(c *spotify.Client, ctx context.Context, plMapping map[string]spotify.ID, playlistName string, user *spotify.PrivateUser, likedSongs map[spotify.ID]struct{}, removeUnlikedSongs bool, wg *sync.WaitGroup) {
-	var playlistID spotify.ID
-	// Check if playlist exists in playlistMapping, create if not
-	if !playlistMappingContains(plMapping, playlistName) {
-		p, err := c.CreatePlaylistForUser(ctx, user.ID, playlistName, "", true, false)
-		checkErr(err)
-		playlistID = p.ID
-	} else {
-		playlistID = plMapping[playlistName]
-	}
+func updatePlaylist(c *spotify.Client, ctx context.Context, plMapping map[string]spotify.ID, playlistName string, likedSongs map[spotify.ID]struct{}, removeUnlikedSongs bool, wg *sync.WaitGroup) {
+	playlistID := plMapping[playlistName]
 
 	// Get existing songs in playlist
 	plSongs, err := c.GetPlaylistItems(ctx, playlistID)
@@ -327,10 +319,18 @@ func run(client *spotify.Client, ctx context.Context, user *spotify.PrivateUser,
 	sem := make(chan int, maxConcurrentUpdates)
 	var wg sync.WaitGroup
 	for pName, songs := range playlistSongs {
+
+		// Make sure playlist exists before updating playlists otherwise a duplicate playlist can be made
+		if !playlistMappingContains(playlistMapping, pName) {
+			p, err := client.CreatePlaylistForUser(ctx, user.ID, pName, "", true, false)
+			checkErr(err)
+			playlistMapping[pName] = p.ID
+		}
+
 		sem <- 1 // will block if there is MAX ints in sem
 		wg.Add(1)
 		go func(playlistName string, songList map[spotify.ID]struct{}) {
-			updatePlaylist(client, context.Background(), playlistMapping, playlistName, user, songList, boolremovedUnlikedSongs, &wg)
+			updatePlaylist(client, context.Background(), playlistMapping, playlistName, songList, boolremovedUnlikedSongs, &wg)
 			<-sem // removes an int from sem, allowing another to proceed
 		}(pName, songs)
 	}
