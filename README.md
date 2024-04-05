@@ -1,5 +1,8 @@
 # Spotify playlist maker
 
+> [!WARNING]
+>  First attempt at Go, expect bugs
+
 ## Setup
 
 ### Spotify application
